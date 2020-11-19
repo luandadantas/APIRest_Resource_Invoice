@@ -1,12 +1,17 @@
 from flask import Flask, jsonify, request
+from flask_jwt_extended import (
+    JWTManager, jwt_required, create_access_token)
 import db
 
 
 app = Flask(__name__)
+app.config['JWT_SECRET_KEY'] = 'super-secret'  # Change this!
+jwt = JWTManager(app)
 
 
 @app.route('/invoices', methods=['GET'])
 @app.route('/invoices/<int:id>', methods=['GET'])
+@jwt_required
 def index(id=None):
     if id:
         result, success = db.get_invoice_by_id(id)
@@ -44,6 +49,7 @@ def index(id=None):
 
 
 @app.route('/new_invoice', methods=['POST'])
+@jwt_required
 def insert_into_db():
     # month, year, document, description, amount
     json = request.get_json()
@@ -76,6 +82,7 @@ def insert_into_db():
 
 
 @app.route('/update_invoice/<int:id>', methods=['PUT'])
+@jwt_required
 def update_invoice(id):
     json = request.get_json()
 
@@ -111,6 +118,7 @@ def update_invoice(id):
 
 
 @app.route('/delete_invoice/<int:id>', methods=['DELETE'])
+@jwt_required
 def delete_invoice(id):
     invoice, success = db.get_invoice_by_id(id)
 
@@ -126,6 +134,26 @@ def delete_invoice(id):
         return jsonify({"msg": 'deu ruim alguma coisa'}), 400
 
     return {}, 204
+
+
+@app.route('/login', methods=['POST'])
+def login():
+    if not request.is_json:
+        return jsonify({"msg": "Missing JSON in request"}), 400
+
+    username = request.json.get('username', None)
+    password = request.json.get('password', None)
+    if not username:
+        return jsonify({"msg": "Missing username parameter"}), 400
+    if not password:
+        return jsonify({"msg": "Missing password parameter"}), 400
+
+    if username != 'test' or password != 'test':
+        return jsonify({"msg": "Bad username or password"}), 401
+
+    # Identity can be any data that is json serializable
+    access_token = create_access_token(identity=username)
+    return jsonify(access_token=access_token), 200
 
 
 if __name__ == '__main__':
