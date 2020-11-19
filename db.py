@@ -17,23 +17,19 @@ def dict_factory(cursor, row):
     return d
 
 
-def get_cursor():
-    conn = sqlite3.connect(DATABASE)
-    conn.row_factory = dict_factory
-    return conn.cursor()
-
-
 def get_invoice_by_id(id):
     try:
-        cursor = get_cursor()
+        conn = sqlite3.connect(DATABASE)
+        conn.row_factory = dict_factory
+        cursor = conn.cursor()
         query = '''
             SELECT
                 id,
-                ReferenceMonth,
-                ReferenceYear,
-                Document,
-                Description,
-                Amount
+                ReferenceMonth AS month,
+                ReferenceYear AS year,
+                Document AS document,
+                Description AS description,
+                Amount AS amount
             FROM
                 invoice
             WHERE
@@ -41,43 +37,88 @@ def get_invoice_by_id(id):
         '''
         cursor.execute(query, (id,))
         result = cursor.fetchone()
-        # import pdb; pdb.set_trace()
         return result, True
     except:
         return [], False
 
 
-def get_many_invoices(page_number=None, limit=None, filter_by=None, order_by="CreatedAt"):
-    if page_number is None and limit is None:
-        return get_all_invoices()
+def get_invoices(
+    page_number=None,
+    limit=10,
+    filter_by=None,
+    filter_value=None,
+    order_by=None
+):
+    where_filter = ""
     
+    if not order_by:
+        order_by = ["CreatedAt"]
+    
+    order_by = [ob + " ASC" for ob in order_by]
+    order_by = ", ".join(order_by)
 
-
-
-def get_all_invoices():
-    try:
-        cursor = get_cursor()
-        query = '''
-            SELECT
-                id,
-                ReferenceMonth,
-                ReferenceYear,
-                Document,
-                Description,
-                Amount
+    if page_number:
+        pagination_filter = f"""
+            id NOT IN ( SELECT
+                id
             FROM
                 invoice
-            WHERE
-                IsActive = 1;
-        '''
+            ORDER BY
+                {order_by} LIMIT {limit*(page_number-1)} )
+        """
+        where_filter += "AND " + pagination_filter
+        order_by += f" LIMIT {limit}"
+    
+    if filter_by and filter_value:
+        where_filter += f"AND {filter_by} = {filter_value}"
+    
+    query = f"""
+        SELECT
+            id,
+            ReferenceMonth AS month,
+            ReferenceYear AS year,
+            Document AS document,
+            Description AS description,
+            Amount AS amount
+        FROM
+            invoice
+        WHERE
+            IsActive = 1
+            {where_filter}
+        ORDER BY
+            {order_by}
+        ;
+    """
+
+    # print(query)
+
+    try:
+        conn = sqlite3.connect(DATABASE)
+        conn.row_factory = dict_factory
+        cursor = conn.cursor()
         cursor.execute(query)
         result = cursor.fetchall()
         return result, True
-    except:
+    except Exception as err:
+        print(err)
         return [], False
 
 
 def create_new_invoice(month, year, document, description, amount):
+    """adds a new invoice to the database
+
+    Args:
+        month (int): [description]
+        year (int): [description]
+        document (str): [description]
+        description (str): [description]
+        amount (float): [description]
+
+    Returns:
+        bool: True
+        or
+        bool: False
+    """
     try:
         conn = sqlite3.connect(DATABASE)
         cursor = conn.cursor()
@@ -98,6 +139,21 @@ def create_new_invoice(month, year, document, description, amount):
 
 
 def update_invoice_by_id(id, month, year, document, description, amount):
+    """Updates an entire resource, or just parts of it, in which it is saved in a database.
+
+    Args:
+        id (int): [description]
+        month (int]): [description]
+        year (int): [description]
+        document (str): [description]
+        description (str): [description]
+        amount (float): [description]
+
+    Returns:
+        bool: True
+        or
+        bool: False
+    """
     try:
         conn = sqlite3.connect(DATABASE)
         cursor = conn.cursor()
@@ -115,6 +171,16 @@ def update_invoice_by_id(id, month, year, document, description, amount):
 
 
 def delete_invoice_by_id(id):
+    """logically deletes the invoice that must be passed by the id
+
+    Args:
+        id (int): [description]
+
+    Returns:
+        bool: True
+        or
+        bool: False
+    """
     try:
         conn = sqlite3.connect(DATABASE)
         cursor = conn.cursor()
@@ -132,103 +198,3 @@ def delete_invoice_by_id(id):
         return True
     except:
         return False
-
-
-def get_invoices_by_document(document):
-    try:
-        cursor = get_cursor()
-        query = '''
-            SELECT
-                id,
-                ReferenceMonth,
-                ReferenceYear,
-                Document,
-                Description,
-                Amount
-            FROM
-                invoice
-            WHERE
-                IsActive = 1 AND Document=?;
-        '''
-        cursor.execute(query, (document,))
-        result = cursor.fetchall()
-        return result, True
-    except:
-        return [], False
-
-
-def get_invoices_by_month(month):
-    try:
-        cursor = get_cursor()
-        query = '''
-            SELECT
-                id,
-                ReferenceMonth,
-                ReferenceYear,
-                Document,
-                Description,
-                Amount
-            FROM
-                invoice
-            WHERE
-                IsActive = 1 AND ReferenceMonth=?;
-        '''
-        cursor.execute(query, (month,))
-        result = cursor.fetchall()
-        return result, True
-    except:
-        return [], False
-
-
-def get_invoices_by_year(year):
-    try:
-        cursor = get_cursor()
-        query = '''
-            SELECT
-                id,
-                ReferenceMonth,
-                ReferenceYear,
-                Document,
-                Description,
-                Amount
-            FROM
-                invoice
-            WHERE
-                IsActive = 1 AND ReferenceYear=?;
-        '''
-        cursor.execute(query, (year,))
-        result = cursor.fetchall()
-        return result, True
-    except:
-        return [], False
-
-
-def get_pagination_invoice(page_number, limit=10, order_by="CreatedAt"):
-    try:
-        cursor = get_cursor()
-        query = f"""
-            SELECT
-                id,
-                ReferenceMonth,
-                ReferenceYear,
-                Document,
-                Description,
-                Amount
-            FROM
-                invoice
-            WHERE
-                id NOT IN ( SELECT
-                        id
-                    FROM
-                        invoice
-                    ORDER BY
-                        {order_by} ASC LIMIT {limit*(page_number-1)} )
-            ORDER BY
-                {order_by} ASC LIMIT {limit}
-        """
-        cursor.execute(query)
-        result = cursor.fetchall()
-        return result, True
-    except Exception as err:
-        print(err)
-        return [], False

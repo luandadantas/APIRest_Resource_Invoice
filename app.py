@@ -8,17 +8,34 @@ app = Flask(__name__)
 @app.route('/invoices', methods=['GET'])
 @app.route('/invoices/<int:id>', methods=['GET'])
 def index(id=None):
-    if id is None:
-        page = request.args.get('page')
-        limit = request.args.get('limit')
-        filter_by = request.args.get('filter_by')
-        order_by = request.args.get('order_by')
-
-        result, success = db.get_all_invoices()
-    else:
+    if id:
         result, success = db.get_invoice_by_id(id)
         if success and (not result):
             return {"msg": 'Invoice not found'}, 404
+
+    else:
+        db_names = {
+            'month': 'ReferenceMonth',
+            'year': 'ReferenceYear',
+            'document': 'Document'
+        }
+
+        order_by_list = request.args.get('order_by', '')
+        order_by_list = order_by_list.split(",")
+
+        order_by = []
+        for ob in order_by_list:
+            field = db_names.get(ob)
+            if field:
+                order_by.append(field)
+
+        result, success = db.get_invoices(
+            page_number=int(request.args.get('page', 0)),
+            limit=int(request.args.get('limit', 10)),
+            filter_by=request.args.get('filter_by'),
+            filter_value=request.args.get('filter_value'),
+            order_by=order_by
+        )
 
     if not success:
         return jsonify({"msg": 'deu ruim alguma coisa'}), 400
@@ -58,8 +75,8 @@ def insert_into_db():
     return {}, 201
 
 
-@app.route('/edit_resource/<int:id>', methods=['PUT'])
-def edit_resource(id):
+@app.route('/update_invoice/<int:id>', methods=['PUT'])
+def update_invoice(id):
     json = request.get_json()
 
     invoice, success = db.get_invoice_by_id(id)
@@ -109,69 +126,6 @@ def delete_invoice(id):
         return jsonify({"msg": 'deu ruim alguma coisa'}), 400
 
     return {}, 204
-
-
-@app.route('/invoices_by_year/<int:year>', methods=['GET'])
-def invoices_by_year(year):
-    result, success = db.get_invoices_by_year(year)
-
-    if not success:
-        return jsonify({"msg": 'deu ruim alguma coisa'}), 400
-
-    return {"result": result}, 200
-
-
-@app.route('/invoices_by_month/<int:month>', methods=['GET'])
-def invoices_by_month(month):
-    result, success = db.get_invoices_by_month(month)
-
-    if not success:
-        return jsonify({"msg": 'deu ruim alguma coisa'}), 400
-
-    return {"result": result}, 200
-
-
-@app.route('/invoices_by_document/<string:document>', methods=['GET'])
-def invoices_by_document(document):
-    result, success = db.get_invoices_by_document(document)
-
-    if not success:
-        return jsonify({"msg": 'deu ruim alguma coisa'}), 400
-
-    return {"result": result}, 200
-
-
-# @app.route('/invoices_filter/<int:month>', methods=['GET'])
-# @app.route('/invoices_filter/<int:year>', methods=['GET'])
-# @app.route('/invoices_filter/<string:document>', methods=['GET'])
-# def invoices_filter(month=None, year=None, document=None):
-#     if month is not None :
-#         result, success = get_invoices_by_month(month)
-#     elif year is not None:
-#         result, success = get_invoices_by_year(year)
-#     elif document is not None:
-#         result, success = get_invoices_by_document(document)
-
-#     if not success:
-#         return jsonify({"msg": 'deu ruim alguma coisa'}), 400
-
-#     return {"result": result}, 200
-
-
-@app.route('/invoices_by_pagination', methods=['GET'])
-def invoices_by_pagination():
-    page = request.args.get('page', 1)
-    limit = request.args.get('limit', 10)
-
-    result, success = db.get_pagination_invoice(int(page), int(limit))
-
-    if not success:
-        return jsonify({"msg": 'deu ruim alguma coisa'}), 400
-
-    return {"result": result}, 200
-
-
-# @app.route('', methods=['PATCH'])
 
 
 if __name__ == '__main__':
