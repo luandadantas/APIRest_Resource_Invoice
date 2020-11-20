@@ -16,12 +16,21 @@ jwt = JWTManager(app)
 #@jwt_required
 def index(id=None):
     """
+    Get invoices according to the request.
+
+    Rotas:
+        - /invoices : Get all active invoices
+        - /invoices/<int:id> : Get an invoice by id.
 
     Args:
-        id ([type], optional): [description]. Defaults to None.
+        page_number (int, optional): Get invoices with pagination. Defaults to None.
+        limit (int, optional): Defines the amount of invoices that will be get by pagination. Defaults to 10.
+        filter_by (str, optional): Database column that will be filtered. Defaults to None.
+        filter_value (int ou str, optional): Value to be fetched within 'filter_by'. Defaults to None.
+        order_by (list, optional): Get invoices sorted by month, year or document. Defaults to None.
 
     Returns:
-        [type]: [description]
+        dict: Returns a json with the requested invoices.
     """
     if id:
         result, success = db.get_invoice_by_id(id)
@@ -29,7 +38,7 @@ def index(id=None):
             return {"msg": 'Invoice not found'}, 404
 
     else:
-        valid_fields = ['month', 'year', 'document',]
+        valid_fields = ['month', 'year', 'document']
 
         order_by_args = request.args.get('order_by', '')
         order_by_list = order_by_args.split(",")
@@ -48,10 +57,11 @@ def index(id=None):
             limit=int(request.args.get('limit', 10)),
             filter_by=filter_by,
             filter_value=request.args.get('filter_value'),
-            order_by=order_by)
+            order_by=order_by
+        )
 
     if not success:
-        return jsonify({"msg": 'deu ruim alguma coisa'}), 400
+        return {"msg": 'The server found an error that it could not handle'}, 500
 
     return jsonify({"result": result}), 200
 
@@ -59,7 +69,8 @@ def index(id=None):
 @app.route('/new_invoice', methods=['POST'])
 #@jwt_required
 def insert_into_db():
-    """adds a new invoice to the database.
+    """
+    Adds a new invoice to the database.
 
     Route: /new_invoice
 
@@ -71,7 +82,12 @@ def insert_into_db():
         amount (float): Invoice amount
 
     Returns:
-        dict: Empty
+        if all goes well:
+            dict: {}
+            Bool: True
+        if something goes wrong:
+            dict: Error message.
+            Bool: False
     """
     json = request.get_json()
 
@@ -97,7 +113,7 @@ def insert_into_db():
     success = db.create_new_invoice(month, year, document, description, amount)
 
     if not success:
-        return jsonify({"msg": 'deu ruim alguma coisa'}), 400
+        return {"msg": 'The server found an error that it could not handle'}, 500
 
     return {}, 201
 
@@ -118,14 +134,19 @@ def update_invoice(id):
         amount (float): new amount value, if there is an update to that value in the request.
 
     Returns:
-        dict: Empty
+        if all goes well:
+            dict: {}
+            Bool: True
+        if something goes wrong:
+            dict: Error message.
+            Bool: False
     """
     json = request.get_json()
 
     invoice, success = db.get_invoice_by_id(id)
 
     if not success:
-        return {"msg": 'something goes wrong. try again later'}, 400
+        return {"msg": 'The server found an error that it could not handle'}, 500
 
     if not invoice:
         return {"msg": 'invoice not found'}, 404
@@ -148,7 +169,7 @@ def update_invoice(id):
     success = db.update_invoice_by_id(id, month, year, document, description, amount)
 
     if not success:
-        return jsonify({"msg": 'something goes wrong during the update. try again later'}), 400
+        return {"msg": 'The server found an error that it could not handle'}, 500
 
     return {}, 204
 
@@ -164,12 +185,17 @@ def delete_invoice(id):
         id (int): id referring to the invoice that will be deleted.
 
     Returns:
-        dict: Empty
+        if all goes well:
+            dict: {}
+            Bool: True
+        if something goes wrong:
+            dict: Error message.
+            Bool: False
     """
     invoice, success = db.get_invoice_by_id(id)
 
     if not success:
-        return {"msg": 'deu ruim alguma coisa'}, 400
+        return {"msg": 'The server found an error that it could not handle'}, 500
 
     if not invoice:
         return {"msg": 'Invoice not found'}, 404
@@ -177,40 +203,27 @@ def delete_invoice(id):
     success = db.delete_invoice_by_id(id)
 
     if not success:
-        return jsonify({"msg": 'deu ruim alguma coisa'}), 400
+        return {"msg": 'The server found an error that it could not handle'}, 500
 
     return {}, 204
 
 
-@app.route('/login', methods=['POST'])
-def login():
-    json = request.get_json()
-
-    username = json.get('username')
-    password = json.get('password')
-
-    if not username:
-        return jsonify({"msg": "Missing username parameter"}), 400
-    if not password:
-        return jsonify({"msg": "Missing password parameter"}), 400
-    
-    current_user, success = db.get_user_by_username(username)
-
-    if not success:
-        return {"msg": "deu ruim alguma coisa"}, 400
-    
-    if not current_user:
-        return {"msg": "user does not exist"}, 404
-    
-    if not (sha1(password.encode('utf-8')).hexdigest() == current_user['password']):
-        return {'msg': 'wrong credentials'}, 401
-
-    access_token = create_access_token(identity=username)
-    return jsonify(access_token=access_token), 200
-
-
 @app.route('/register', methods=['POST'])
 def register():
+    """creates a new user who will be allowed to access the database.
+
+    Args:
+        username (str): name of the user to be saved in the database.
+        password (str): password of the user to be saved in the database.
+
+    Returns:
+        if all goes well:
+            dict: {}
+            Bool: True
+        if something goes wrong:
+            dict: Error message.
+            Bool: False
+    """
     json = request.get_json()
 
     username = json.get('username')
@@ -224,17 +237,58 @@ def register():
     user, success = db.get_user_by_username(username)
 
     if not success:
-        return {"msg": "deu ruim alguma coisa"}, 400
+        return {"msg": 'The server found an error that it could not handle'}, 500
     
     if user:
         return {"msg": "username already exists"}, 409
     
     hash_password = sha1(password.encode('utf-8')).hexdigest()
 
-    if db.create_new_user(username, hash_password):
-        return {'msg': 'user created'}, 200
+    if not db.create_new_user(username, hash_password):
+        return {"msg": 'The server found an error that it could not handle'}, 500
 
-    return {'msg': 'Deu ruim dnv'}, 400
+    return {}, 204
+
+
+@app.route('/login', methods=['POST'])
+def login():
+    """creates user login
+
+    Routes: /login
+
+    Args:
+        username (str): name of the user.
+        password (str): password value.
+
+    Returns:
+        if all goes well:
+            dict: token
+        if something goes wrong:
+            dict: Error message 
+    """
+    json = request.get_json()
+
+    username = json.get('username')
+    password = json.get('password')
+
+    if not username:
+        return jsonify({"msg": "Missing username parameter"}), 400
+    if not password:
+        return jsonify({"msg": "Missing password parameter"}), 400
+    
+    current_user, success = db.get_user_by_username(username)
+
+    if not success:
+        return {"msg": 'The server found an error that it could not handle'}, 500
+    
+    if not current_user:
+        return {"msg": "user does not exist"}, 404
+    
+    if not (sha1(password.encode('utf-8')).hexdigest() == current_user['password']):
+        return {'msg': 'wrong credentials'}, 401
+
+    access_token = create_access_token(identity=username)
+    return jsonify(access_token=access_token), 200
 
 
 if __name__ == '__main__':

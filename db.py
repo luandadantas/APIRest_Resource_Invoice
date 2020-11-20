@@ -18,18 +18,18 @@ def dict_factory(cursor, row):
 
 
 def get_invoice_by_id(id):
-    """returns the invoice that was passed by the id,
-        along with the 'invoices/<int:id>' route.
+    """returns the invoice that was passed by the id.
 
     Args:
-        id (int): value that corresponds to the invoice id
-         that will be returned in the request.
+        id (int): value of the invoice id that will be get from the database.
 
     Returns:
-        if all goes well, it will return a dictionary format
-        json file with the invoice of the id called in the
-        request and a Boolean value of True. if something goes wrong, 
-        it will return an empty dictionary and a false Boolean value.
+        if all goes well:
+            dict: get the invoice passed in the request
+            Bool: True
+        if something goes wrong:
+            dict: []
+            Bool: False
     """
     try:
         conn = sqlite3.connect(DATABASE)
@@ -63,29 +63,48 @@ def get_invoices(
     order_by=None
 ):
     """
-    Main function, which is responsible for get invoices according to the request.
-
-        - all invoices;
-        - invoices with pagination;
-        - invoices filtered by month, year and document;
-        - and invoices ordered by month, year, document or combinations between.
-        Can also make filters by mixing pagination, filters and sorting.
+    Get invoices according to the request.
+    what can be requested:
+        - All invoices
+        - Invoices with pagination
+        - Invoices filtered by month, year and document
+        - Invoices ordered by month, year, document or combinations between
+        - Can also make filters by mixing pagination, filters and sorting.
 
     Args:
-        page_number (int, optional): [description]. Defaults to None.
-        limit (int, optional): [description]. Defaults to 10.
-        filter_by (str, optional): [description]. Defaults to None.
-        filter_value ([type], optional): [description]. Defaults to None.
-        order_by ([type], optional): [description]. Defaults to None.
+        page_number (int, optional): Get invoices with pagination. Defaults to None.
+        limit (int, optional): Defines the amount of invoices that will be get by pagination. Defaults to 10.
+        filter_by (str, optional): Database column that will be filtered. Defaults to None.
+        filter_value (int ou str, optional): Value to be fetched within 'filter_by'. Defaults to None.
+        order_by (list, optional): Get invoices sorted by month, year or document. Defaults to None.
 
     Returns:
-        str: [description]
+        if all goes well:
+            dict: invoices with the filters that came on request
+            bool: True
+        if something goes wrong:
+            dict: []
+            bool: False
     """
     where_filter = ""
     
+    valid_fields = {
+        'month': 'ReferenceMonth',
+        'year': 'ReferenceYear',
+        'document': 'Document'
+    }
+
+    ob_fields = []
+    for ob in order_by:
+        field = valid_fields.get(ob)
+        if field:
+            ob_fields.append(field)
+
+    order_by = ob_fields
+
     if not order_by:
         order_by = ["CreatedAt"]
-    
+
     order_by = [ob + " ASC" for ob in order_by]
     order_by = ", ".join(order_by)
 
@@ -127,6 +146,7 @@ def get_invoices(
     """
 
     try:
+        print(query)
         conn = sqlite3.connect(DATABASE)
         conn.row_factory = dict_factory
         cursor = conn.cursor()
@@ -176,11 +196,11 @@ def update_invoice_by_id(id, month, year, document, description, amount):
 
     Args:
         id (int): id referring to the invoice that will be updated.
-        month (int): new month value, if there is an update to that value in the request.
-        year (int): new year value, if there is an update to that value in the request.
-        document (str): new document value, if there is an update to that value in the request.
-        description (str): new description value, if there is an update to that value in the request.
-        amount (float): new amount value, if there is an update to that value in the request.
+        month (int): new value of 'month', if it comes in the request
+        year (int): new value of 'year', if it comes in the request
+        document (str): new value of 'document', if it comes in the request
+        description (str): new value of 'desription', if it comes in the request
+        amount (float): new value of 'amount', if it comes in the request
 
     Returns:
         if all goes well - bool: True
@@ -203,7 +223,7 @@ def update_invoice_by_id(id, month, year, document, description, amount):
 
 
 def delete_invoice_by_id(id):
-    """logically deletes the invoice that must be passed by the id.
+    """logical deletion is made to the id passed on the request
 
     Args:
         id (int): id referring to the invoice that will be deleted.
@@ -231,7 +251,48 @@ def delete_invoice_by_id(id):
         return False
     
 
+def create_new_user(username, hash_password):
+    """creates a new user who will be allowed to access the database.
+
+    Args:
+        username (str): name of the user to be saved in the database.
+        hash_password (str): password encrypts
+
+    Returns:
+        if all goes well - bool: True
+        if something goes wrong - bool: False
+    """
+    try:
+        conn = sqlite3.connect(DATABASE)
+        cursor = conn.cursor()
+
+        query = '''
+            INSERT INTO user
+            (Username, Password)
+            values
+            (?, ?)'''
+        cursor.execute(query, (username, hash_password))
+        conn.commit()
+        cursor.close()
+        return True
+    except:
+        return False
+
+
 def get_user_by_username(username):
+    """returns the user that was passed by the username.
+    
+    Args:
+        username (str): name of the user who will have access to the database.
+
+    Returns:
+        if all goes well:
+            str: user
+            Bool: True
+        if something goes wrong:
+            dict: []
+            Bool: False
+    """
     try:
         conn = sqlite3.connect(DATABASE)
         conn.row_factory = dict_factory
@@ -250,21 +311,3 @@ def get_user_by_username(username):
         return result, True
     except:
         return {}, False
-
-
-def create_new_user(username, hash_password):
-    try:
-        conn = sqlite3.connect(DATABASE)
-        cursor = conn.cursor()
-
-        query = '''
-            INSERT INTO user
-            (Username, Password)
-            values
-            (?, ?)'''
-        cursor.execute(query, (username, hash_password))
-        conn.commit()
-        cursor.close()
-        return True
-    except:
-        return False
