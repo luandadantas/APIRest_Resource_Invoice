@@ -18,6 +18,19 @@ def dict_factory(cursor, row):
 
 
 def get_invoice_by_id(id):
+    """returns the invoice that was passed by the id,
+        along with the 'invoices/<int:id>' route.
+
+    Args:
+        id (int): value that corresponds to the invoice id
+         that will be returned in the request.
+
+    Returns:
+        if all goes well, it will return a dictionary format
+        json file with the invoice of the id called in the
+        request and a Boolean value of True. if something goes wrong, 
+        it will return an empty dictionary and a false Boolean value.
+    """
     try:
         conn = sqlite3.connect(DATABASE)
         conn.row_factory = dict_factory
@@ -49,6 +62,25 @@ def get_invoices(
     filter_value=None,
     order_by=None
 ):
+    """
+    Main function, which is responsible for get invoices according to the request.
+
+        - all invoices;
+        - invoices with pagination;
+        - invoices filtered by month, year and document;
+        - and invoices ordered by month, year, document or combinations between.
+        Can also make filters by mixing pagination, filters and sorting.
+
+    Args:
+        page_number (int, optional): [description]. Defaults to None.
+        limit (int, optional): [description]. Defaults to 10.
+        filter_by (str, optional): [description]. Defaults to None.
+        filter_value ([type], optional): [description]. Defaults to None.
+        order_by ([type], optional): [description]. Defaults to None.
+
+    Returns:
+        str: [description]
+    """
     where_filter = ""
     
     if not order_by:
@@ -59,7 +91,8 @@ def get_invoices(
 
     if page_number:
         pagination_filter = f"""
-            id NOT IN ( SELECT
+            id NOT IN (
+            SELECT
                 id
             FROM
                 invoice
@@ -70,6 +103,9 @@ def get_invoices(
         order_by += f" LIMIT {limit}"
     
     if filter_by and filter_value:
+        if filter_by == 'document':
+            filter_value = f'"{filter_value}"'
+
         where_filter += f"AND {filter_by} = {filter_value}"
     
     query = f"""
@@ -90,8 +126,6 @@ def get_invoices(
         ;
     """
 
-    # print(query)
-
     try:
         conn = sqlite3.connect(DATABASE)
         conn.row_factory = dict_factory
@@ -105,19 +139,18 @@ def get_invoices(
 
 
 def create_new_invoice(month, year, document, description, amount):
-    """adds a new invoice to the database
+    """adds a new invoice to the database.
 
     Args:
-        month (int): [description]
-        year (int): [description]
-        document (str): [description]
-        description (str): [description]
-        amount (float): [description]
+        month (int): Invoice month
+        year (int): Invoice year
+        document (str): Invoice document
+        description (str): Invoice description
+        amount (float): Invoice amount
 
     Returns:
-        bool: True
-        or
-        bool: False
+        if all goes well - bool: True
+        if something goes wrong - bool: False
     """
     try:
         conn = sqlite3.connect(DATABASE)
@@ -139,20 +172,19 @@ def create_new_invoice(month, year, document, description, amount):
 
 
 def update_invoice_by_id(id, month, year, document, description, amount):
-    """Updates an entire resource, or just parts of it, in which it is saved in a database.
+    """Updates an entire invoice, or just parts of it, in which it is saved in a database.
 
     Args:
-        id (int): [description]
-        month (int]): [description]
-        year (int): [description]
-        document (str): [description]
-        description (str): [description]
-        amount (float): [description]
+        id (int): id referring to the invoice that will be updated.
+        month (int): new month value, if there is an update to that value in the request.
+        year (int): new year value, if there is an update to that value in the request.
+        document (str): new document value, if there is an update to that value in the request.
+        description (str): new description value, if there is an update to that value in the request.
+        amount (float): new amount value, if there is an update to that value in the request.
 
     Returns:
-        bool: True
-        or
-        bool: False
+        if all goes well - bool: True
+        if something goes wrong - bool: False
     """
     try:
         conn = sqlite3.connect(DATABASE)
@@ -171,15 +203,14 @@ def update_invoice_by_id(id, month, year, document, description, amount):
 
 
 def delete_invoice_by_id(id):
-    """logically deletes the invoice that must be passed by the id
+    """logically deletes the invoice that must be passed by the id.
 
     Args:
-        id (int): [description]
+        id (int): id referring to the invoice that will be deleted.
 
     Returns:
-        bool: True
-        or
-        bool: False
+        if all goes well - bool: True
+        if something goes wrong - bool: False
     """
     try:
         conn = sqlite3.connect(DATABASE)
@@ -193,6 +224,45 @@ def delete_invoice_by_id(id):
             WHERE id=?'''
 
         cursor.execute(query, (is_active, now, id))
+        conn.commit()
+        cursor.close()
+        return True
+    except:
+        return False
+    
+
+def get_user_by_username(username):
+    try:
+        conn = sqlite3.connect(DATABASE)
+        conn.row_factory = dict_factory
+        cursor = conn.cursor()
+        query = f'''
+            SELECT
+                Username as username,
+                Password as password
+            FROM
+                user
+            WHERE
+                username = "{username}";
+        '''
+        cursor.execute(query)
+        result = cursor.fetchone()
+        return result, True
+    except:
+        return {}, False
+
+
+def create_new_user(username, hash_password):
+    try:
+        conn = sqlite3.connect(DATABASE)
+        cursor = conn.cursor()
+
+        query = '''
+            INSERT INTO user
+            (Username, Password)
+            values
+            (?, ?)'''
+        cursor.execute(query, (username, hash_password))
         conn.commit()
         cursor.close()
         return True

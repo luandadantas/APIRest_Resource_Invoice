@@ -1,3 +1,5 @@
+from hashlib import sha1
+
 from flask import Flask, jsonify, request
 from flask_jwt_extended import (
     JWTManager, jwt_required, create_access_token)
@@ -11,36 +13,42 @@ jwt = JWTManager(app)
 
 @app.route('/invoices', methods=['GET'])
 @app.route('/invoices/<int:id>', methods=['GET'])
-@jwt_required
+#@jwt_required
 def index(id=None):
+    """
+
+    Args:
+        id ([type], optional): [description]. Defaults to None.
+
+    Returns:
+        [type]: [description]
+    """
     if id:
         result, success = db.get_invoice_by_id(id)
         if success and (not result):
             return {"msg": 'Invoice not found'}, 404
 
     else:
-        db_names = {
-            'month': 'ReferenceMonth',
-            'year': 'ReferenceYear',
-            'document': 'Document'
-        }
+        valid_fields = ['month', 'year', 'document',]
 
-        order_by_list = request.args.get('order_by', '')
-        order_by_list = order_by_list.split(",")
+        order_by_args = request.args.get('order_by', '')
+        order_by_list = order_by_args.split(",")
 
         order_by = []
-        for ob in order_by_list:
-            field = db_names.get(ob)
-            if field:
+        for field in order_by_list:
+            if field in valid_fields:
                 order_by.append(field)
+        
+        filter_by = request.args.get('filter_by')
+        if filter_by not in valid_fields:
+            filter_by = None
 
         result, success = db.get_invoices(
             page_number=int(request.args.get('page', 0)),
             limit=int(request.args.get('limit', 10)),
-            filter_by=request.args.get('filter_by'),
+            filter_by=filter_by,
             filter_value=request.args.get('filter_value'),
-            order_by=order_by
-        )
+            order_by=order_by)
 
     if not success:
         return jsonify({"msg": 'deu ruim alguma coisa'}), 400
@@ -49,9 +57,22 @@ def index(id=None):
 
 
 @app.route('/new_invoice', methods=['POST'])
-@jwt_required
+#@jwt_required
 def insert_into_db():
-    # month, year, document, description, amount
+    """adds a new invoice to the database.
+
+    Route: /new_invoice
+
+    Args:
+        month (int): Invoice month
+        year (int): Invoice year
+        document (str): Invoice document
+        description (str): Invoice description
+        amount (float): Invoice amount
+
+    Returns:
+        dict: Empty
+    """
     json = request.get_json()
 
     month = json.get('month')
@@ -82,17 +103,32 @@ def insert_into_db():
 
 
 @app.route('/update_invoice/<int:id>', methods=['PUT'])
-@jwt_required
+#@jwt_required
 def update_invoice(id):
+    """Updates an entire invoice, or just parts of it, in which it is saved in a database.
+
+    Route: /update_invoice/<int:id>
+
+    Args:
+        id (int): id referring to the invoice that will be updated.
+        month (int): new month value, if there is an update to that value in the request.
+        year (int): new year value, if there is an update to that value in the request.
+        document (str): new document value, if there is an update to that value in the request.
+        description (str): new description value, if there is an update to that value in the request.
+        amount (float): new amount value, if there is an update to that value in the request.
+
+    Returns:
+        dict: Empty
+    """
     json = request.get_json()
 
     invoice, success = db.get_invoice_by_id(id)
 
     if not success:
-        return {"msg": 'deu ruim alguma coisa'}, 400
+        return {"msg": 'something goes wrong. try again later'}, 400
 
     if not invoice:
-        return {"msg": 'Invoice not found'}, 404
+        return {"msg": 'invoice not found'}, 404
 
     new_month = json.get('month')
     new_year = json.get('year')
@@ -103,23 +139,33 @@ def update_invoice(id):
     if (not new_month) and (not new_year) and (not new_document) and (not new_description) and (not new_amount):
         return {"msg": "JSON have to be at least one field to update"}, 400
 
-    month = new_month if new_month else invoice.get('ReferenceMonth')
-    year = new_year if new_year else invoice.get('ReferenceYear')
-    document = new_document if new_document else invoice.get('Document')
-    description = new_description if new_description else invoice.get('Description')
-    amount = new_amount if new_amount else invoice.get('Amount')
+    month = new_month if new_month else invoice.get('month')
+    year = new_year if new_year else invoice.get('year')
+    document = new_document if new_document else invoice.get('document')
+    description = new_description if new_description else invoice.get('description')
+    amount = new_amount if new_amount else invoice.get('amount')
 
     success = db.update_invoice_by_id(id, month, year, document, description, amount)
 
     if not success:
-        return jsonify({"msg": 'deu ruim alguma coisa'}), 400
+        return jsonify({"msg": 'something goes wrong during the update. try again later'}), 400
 
     return {}, 204
 
 
 @app.route('/delete_invoice/<int:id>', methods=['DELETE'])
-@jwt_required
+#@jwt_required
 def delete_invoice(id):
+    """logically deletes the invoice that must be passed by the id.
+
+    Route: /delete_invoice/<int:id>
+
+    Args:
+        id (int): id referring to the invoice that will be deleted.
+
+    Returns:
+        dict: Empty
+    """
     invoice, success = db.get_invoice_by_id(id)
 
     if not success:
@@ -138,22 +184,57 @@ def delete_invoice(id):
 
 @app.route('/login', methods=['POST'])
 def login():
-    if not request.is_json:
-        return jsonify({"msg": "Missing JSON in request"}), 400
+    json = request.get_json()
 
-    username = request.json.get('username', None)
-    password = request.json.get('password', None)
+    username = json.get('username')
+    password = json.get('password')
+
+    if not username:
+        return jsonify({"msg": "Missing username parameter"}), 400
+    if not password:
+        return jsonify({"msg": "Missing password parameter"}), 400
+    
+    current_user, success = db.get_user_by_username(username)
+
+    if not success:
+        return {"msg": "deu ruim alguma coisa"}, 400
+    
+    if not current_user:
+        return {"msg": "user does not exist"}, 404
+    
+    if not (sha1(password.encode('utf-8')).hexdigest() == current_user['password']):
+        return {'msg': 'wrong credentials'}, 401
+
+    access_token = create_access_token(identity=username)
+    return jsonify(access_token=access_token), 200
+
+
+@app.route('/register', methods=['POST'])
+def register():
+    json = request.get_json()
+
+    username = json.get('username')
+    password = json.get('password')
+
     if not username:
         return jsonify({"msg": "Missing username parameter"}), 400
     if not password:
         return jsonify({"msg": "Missing password parameter"}), 400
 
-    if username != 'test' or password != 'test':
-        return jsonify({"msg": "Bad username or password"}), 401
+    user, success = db.get_user_by_username(username)
 
-    # Identity can be any data that is json serializable
-    access_token = create_access_token(identity=username)
-    return jsonify(access_token=access_token), 200
+    if not success:
+        return {"msg": "deu ruim alguma coisa"}, 400
+    
+    if user:
+        return {"msg": "username already exists"}, 409
+    
+    hash_password = sha1(password.encode('utf-8')).hexdigest()
+
+    if db.create_new_user(username, hash_password):
+        return {'msg': 'user created'}, 200
+
+    return {'msg': 'Deu ruim dnv'}, 400
 
 
 if __name__ == '__main__':
