@@ -7,13 +7,13 @@ import db
 
 
 app = Flask(__name__)
-app.config['JWT_SECRET_KEY'] = 'super-secret'  # Change this!
+app.config['JWT_SECRET_KEY'] = 'super-secret'
 jwt = JWTManager(app)
 
 
 @app.route('/invoices', methods=['GET'])
 @app.route('/invoices/<int:id>', methods=['GET'])
-#@jwt_required
+@jwt_required
 def index(id=None):
     """
     Get invoices according to the request.
@@ -67,7 +67,7 @@ def index(id=None):
 
 
 @app.route('/new_invoice', methods=['POST'])
-#@jwt_required
+@jwt_required
 def insert_into_db():
     """
     Adds a new invoice to the database.
@@ -119,7 +119,7 @@ def insert_into_db():
 
 
 @app.route('/update_invoice/<int:id>', methods=['PUT'])
-#@jwt_required
+@jwt_required
 def update_invoice(id):
     """Updates an entire invoice, or just parts of it, in which it is saved in a database.
 
@@ -175,7 +175,7 @@ def update_invoice(id):
 
 
 @app.route('/delete_invoice/<int:id>', methods=['DELETE'])
-#@jwt_required
+@jwt_required
 def delete_invoice(id):
     """logically deletes the invoice that must be passed by the id.
 

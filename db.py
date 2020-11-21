@@ -146,15 +146,13 @@ def get_invoices(
     """
 
     try:
-        print(query)
         conn = sqlite3.connect(DATABASE)
         conn.row_factory = dict_factory
         cursor = conn.cursor()
         cursor.execute(query)
         result = cursor.fetchall()
         return result, True
-    except Exception as err:
-        print(err)
+    except:
         return [], False
 
 
